@@ -20,7 +20,7 @@ app = FastAPI(title="CCTV Streaming Server")
 # CAMERA CONFIGURATION
 # ============================================================
 
-CAMERA_IP = "10.179.228.6"
+CAMERA_IP = "192.168.1.4"
 CAMERA_PORT = 8080
 
 CAMERA_USERNAME = "hello"
