@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI CCTV Platform</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #111827;
+            color: white;
+        }
+
+        header {
+            padding: 20px 30px;
+            background: #1f2937;
+            border-bottom: 1px solid #374151;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .container {
+            padding: 30px;
+        }
+
+        .camera-card {
+            max-width: 1000px;
+            background: #1f2937;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #374151;
+        }
+
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+        }
+
+        .camera-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .status.online .status-dot {
+            background: #22c55e;
+        }
+
+        .status.offline .status-dot {
+            background: #ef4444;
+        }
+
+        .video-container {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: black;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .message {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        .controls {
+            padding: 15px 20px;
+            color: #9ca3af;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>AI CCTV Platform</h1>
+</header>
+
+<div class="container">
+
+    <div class="camera-card">
+
+        <div class="camera-header">
+
+            <div class="camera-name" id="cameraName">
+                Loading camera...
+            </div>
+
+            <div class="status" id="cameraStatus">
+
+                <div class="status-dot"></div>
+
+                <span id="statusText">
+                    Checking...
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class="video-container">
+
+            <video
+                id="video"
+                autoplay
+                muted
+                playsinline>
+            </video>
+
+            <div
+                class="message"
+                id="message">
+                Connecting to camera...
+            </div>
+
+        </div>
+
+        <div class="controls">
+
+            Camera ID:
+            <span id="cameraId">---</span>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const API_BASE = "http://127.0.0.1:8001";
+
+const CAMERA_ID = "cam1";
+
+const video = document.getElementById("video");
+
+const cameraName =
+    document.getElementById("cameraName");
+
+const cameraStatus =
+    document.getElementById("cameraStatus");
+
+const statusText =
+    document.getElementById("statusText");
+
+const cameraId =
+    document.getElementById("cameraId");
+
+const message =
+    document.getElementById("message");
+
+
+// ============================================================
+// Load Camera Information
+// ============================================================
+
+async function loadCamera() {
+
+    const response = await fetch(
+        `${API_BASE}/api/cameras/${CAMERA_ID}`
+    );
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Camera information unavailable"
+        );
+
+    }
+
+    const camera = await response.json();
+
+    cameraName.textContent =
+        camera.name;
+
+    cameraId.textContent =
+        camera.camera_id;
+}
+
+
+// ============================================================
+// Create WebRTC SDP Offer
+// ============================================================
+
+async function createOffer() {
+
+    const peerConnection =
+        new RTCPeerConnection({
+            iceServers: []
+        });
+
+
+    // We want to RECEIVE video
+    peerConnection.addTransceiver(
+        "video",
+        {
+            direction: "recvonly"
+        }
+    );
+
+
+    // --------------------------------------------------------
+    // ICE state monitoring
+    // --------------------------------------------------------
+
+    peerConnection.oniceconnectionstatechange =
+        () => {
+
+            console.log(
+                "ICE state:",
+                peerConnection.iceConnectionState
+            );
+
+        };
+
+
+    // --------------------------------------------------------
+    // Receive remote video
+    // --------------------------------------------------------
+
+    peerConnection.ontrack =
+        (event) => {
+
+            console.log(
+                "Remote track received"
+            );
+
+            if (event.streams.length > 0) {
+
+                video.srcObject =
+                    event.streams[0];
+
+                message.style.display =
+                    "none";
+
+            }
+
+        };
+
+
+    // --------------------------------------------------------
+    // Create SDP offer
+    // --------------------------------------------------------
+
+    const offer =
+        await peerConnection.createOffer();
+
+
+    await peerConnection.setLocalDescription(
+        offer
+    );
+
+
+    // --------------------------------------------------------
+    // Wait for ICE gathering
+    // --------------------------------------------------------
+
+    await waitForIceGathering(
+        peerConnection
+    );
+
+
+    return {
+        peerConnection: peerConnection,
+        offer: peerConnection.localDescription
+    };
+}
+
+
+// ============================================================
+// Wait for ICE Gathering
+// ============================================================
+
+function waitForIceGathering(
+    peerConnection
+) {
+
+    return new Promise(
+        (resolve) => {
+
+            if (
+                peerConnection.iceGatheringState
+                === "complete"
+            ) {
+
+                resolve();
+
+                return;
+            }
+
+
+            function checkState() {
+
+                if (
+                    peerConnection.iceGatheringState
+                    === "complete"
+                ) {
+
+                    peerConnection
+                        .removeEventListener(
+                            "icegatheringstatechange",
+                            checkState
+                        );
+
+                    resolve();
+
+                }
+
+            }
+
+
+            peerConnection.addEventListener(
+                "icegatheringstatechange",
+                checkState
+            );
+
+        }
+    );
+
+}
+
+
+// ============================================================
+// Connect to MediaMTX WHEP
+// ============================================================
+
+async function connectWebRTC(
+    streamURL
+) {
+
+    message.textContent =
+        "Connecting to live video...";
+
+
+    const result =
+        await createOffer();
+
+
+    const whepURL =
+        streamURL + "whep";
+
+
+    console.log(
+        "WHEP URL:",
+        whepURL
+    );
+
+
+    const response =
+        await fetch(
+            whepURL,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/sdp"
+                },
+
+                body:
+                    result.offer.sdp
+            }
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            `WHEP request failed: ${response.status}`
+        );
+
+    }
+
+
+    const answerSDP =
+        await response.text();
+
+
+    console.log(
+        "Received SDP answer"
+    );
+
+
+    await result.peerConnection
+        .setRemoteDescription({
+
+            type: "answer",
+
+            sdp: answerSDP
+
+        });
+
+
+    console.log(
+        "WebRTC connection established"
+    );
+
+}
+
+
+// ============================================================
+// Load Stream Information
+// ============================================================
+
+async function loadStream() {
+
+    const response =
+        await fetch(
+            `${API_BASE}/api/cameras/${CAMERA_ID}/stream`
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Stream API unavailable"
+        );
+
+    }
+
+
+    const stream =
+        await response.json();
+
+
+    if (!stream.online) {
+
+        cameraStatus.className =
+            "status offline";
+
+        statusText.textContent =
+            "OFFLINE";
+
+        message.textContent =
+            "Camera is offline";
+
+        return;
+
+    }
+
+
+    cameraStatus.className =
+        "status online";
+
+    statusText.textContent =
+        "ONLINE";
+
+
+    await connectWebRTC(
+        stream.streams.webrtc
+    );
+
+}
+
+
+// ============================================================
+// Start Application
+// ============================================================
+
+async function start() {
+
+    try {
+
+        await loadCamera();
+
+        await loadStream();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            error
+        );
+
+
+        cameraStatus.className =
+            "status offline";
+
+        statusText.textContent =
+            "ERROR";
+
+        message.textContent =
+            "Unable to connect to camera";
+
+    }
+
+}
+
+
+start();
+
+</script>
+
+</body>
+
+</html>

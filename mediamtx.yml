@@ -1,0 +1,179 @@
+# ###############################################################################
+# # MediaMTX configuration
+# #
+# # Camera -> FFmpeg -> RTSP -> MediaMTX -> WebRTC/HLS -> Browser
+# #
+# # For now:
+# #   MediaMTX runs on the laptop.
+# #
+# # Later:
+# #   MediaMTX runs on AWS.
+# #
+# # FFmpeg runs wherever the physical camera is located and PUSHES the stream
+# # outward to MediaMTX.
+# ###############################################################################
+
+
+# # ---------------------------------------------------------------------------
+# # HLS
+# # ---------------------------------------------------------------------------
+
+# hls: yes
+# hlsAddress: :8888
+
+# # Updated name for current MediaMTX versions
+# hlsAllowOrigins: ['*']
+
+# hlsVariant: mpegts
+# hlsSegmentDuration: 1s
+# hlsSegmentCount: 3
+
+
+# # ---------------------------------------------------------------------------
+# # RTSP
+# # ---------------------------------------------------------------------------
+
+# rtsp: yes
+# rtspAddress: :8554
+
+
+# # ---------------------------------------------------------------------------
+# # WebRTC
+# # ---------------------------------------------------------------------------
+
+# webrtc: yes
+# webrtcAddress: :8889
+
+# # For local testing this is enough.
+# # Later, when deployed to AWS, we will configure ICE/STUN/TURN properly.
+
+
+# # ---------------------------------------------------------------------------
+# # Authentication
+# # ---------------------------------------------------------------------------
+
+# authInternalUsers:
+
+#   # FFmpeg uses this account to PUSH camera streams
+#   - user: pusher
+#     pass: Sangola123
+
+#     permissions:
+#       - action: publish
+
+#   # Browser users can READ streams
+#   - user: any
+#     pass:
+
+#     permissions:
+#       - action: read
+
+
+# # ---------------------------------------------------------------------------
+# # CAMERA PATHS
+# # ---------------------------------------------------------------------------
+
+# paths:
+
+#   # Camera 1
+#   cam1:
+#     source: publisher
+
+#   # Camera 2
+#   cam2:
+#     source: publisher
+
+#   # Camera 3
+#   cam3:
+#     source: publisher
+
+#   # Camera 4
+#   cam4:
+#     source: publisher
+
+###############################################################################
+# MediaMTX Configuration
+###############################################################################
+
+# ============================================================
+# HLS
+# ============================================================
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigins: ['*']
+hlsVariant: mpegts
+hlsSegmentDuration: 1s
+hlsSegmentCount: 3
+
+
+# ============================================================
+# RTSP
+# ============================================================
+
+rtsp: yes
+rtspAddress: :8554
+
+
+# ============================================================
+# WebRTC
+# ============================================================
+
+webrtc: yes
+webrtcAddress: :8889
+
+webrtcAllowOrigins:
+  - http://127.0.0.1:5500
+  - http://localhost:5500
+
+
+# ============================================================
+# MediaMTX Control API
+# ============================================================
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+
+# ============================================================
+# Authentication
+# ============================================================
+
+authInternalUsers:
+
+  # FFmpeg / API user
+  - user: PS
+    pass: Sangola@123
+    ips: []
+
+    permissions:
+      - action: publish
+      - action: read
+      - action: api
+
+
+  # Browser WebRTC read access
+  - user: any
+    pass:
+    ips: []
+
+    permissions:
+      - action: read
+
+
+# ============================================================
+# Camera Paths
+# ============================================================
+
+paths:
+
+  cam1:
+    source: publisher
+
+  cam2:
+    source: publisher
+
+  cam3:
+    source: publisher
+
+  cam4:
+    source: publisher
