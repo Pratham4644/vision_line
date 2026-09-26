@@ -98,6 +98,9 @@
 # ============================================================
 # HLS
 # ============================================================
+# ============================================================
+# HLS
+# ============================================================
 hls: yes
 hlsAddress: :8888
 hlsAllowOrigins: ['*']
@@ -122,12 +125,11 @@ webrtc: yes
 webrtcAddress: :8889
 
 webrtcAllowOrigins:
-  - http://127.0.0.1:5500
-  - http://localhost:5500
+  - '*'
 
 
 # ============================================================
-# MediaMTX Control API
+# API
 # ============================================================
 
 api: yes
@@ -135,45 +137,40 @@ apiAddress: 127.0.0.1:9997
 
 
 # ============================================================
-# Authentication
+# AUTHENTICATION
 # ============================================================
 
 authInternalUsers:
 
-  # FFmpeg / API user
+  # FFmpeg publisher
   - user: PS
-    pass: Sangola@123
+    pass: Sasha123
     ips: []
-
     permissions:
       - action: publish
       - action: read
       - action: api
 
-
-  # Browser WebRTC read access
+  # Temporary browser read access
   - user: any
     pass:
     ips: []
-
     permissions:
       - action: read
 
 
 # ============================================================
-# Camera Paths
+# CAMERA PATHS
 # ============================================================
-
 paths:
-
   cam1:
     source: publisher
 
-  cam2:
+  cam-hik1:
     source: publisher
 
-  cam3:
+  cam-hik2:
     source: publisher
 
-  cam4:
+  cam-hik3:
     source: publisher

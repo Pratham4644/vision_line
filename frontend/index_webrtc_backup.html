@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI CCTV Platform</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #111827;
+            color: white;
+        }
+
+        header {
+            padding: 20px 30px;
+            background: #1f2937;
+            border-bottom: 1px solid #374151;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .summary {
+            margin-top: 8px;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .container {
+            padding: 30px;
+        }
+
+        .camera-grid {
+            display: grid;
+            grid-template-columns:
+                repeat(auto-fit, minmax(420px, 1fr));
+            gap: 20px;
+        }
+
+        .camera-card {
+            background: #1f2937;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #374151;
+        }
+
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+        }
+
+        .camera-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .camera-id {
+            color: #9ca3af;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .status.online .status-dot {
+            background: #22c55e;
+        }
+
+        .status.offline .status-dot {
+            background: #ef4444;
+        }
+
+        .status.error .status-dot {
+            background: #f59e0b;
+        }
+
+        .video-container {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: black;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .message {
+            position: absolute;
+            inset: 0;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            color: #9ca3af;
+            font-size: 15px;
+
+            text-align: center;
+            padding: 20px;
+        }
+
+        .controls {
+            padding: 12px 20px;
+            color: #9ca3af;
+            font-size: 13px;
+            border-top: 1px solid #374151;
+        }
+
+        /*
+        ========================================================
+        START / STOP BUTTONS
+        ========================================================
+        */
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            padding: 12px 20px;
+            border-top: 1px solid #374151;
+        }
+
+        .button-row button {
+            border: none;
+            border-radius: 6px;
+            padding: 9px 16px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .start-button {
+            background: #22c55e;
+            color: white;
+        }
+
+        .stop-button {
+            background: #ef4444;
+            color: white;
+        }
+
+        .button-row button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            color: #9ca3af;
+            text-align: center;
+            padding: 50px;
+        }
+
+        .error {
+            color: #f87171;
+            text-align: center;
+            padding: 50px;
+        }
+
+        @media (max-width: 600px) {
+
+            .container {
+                padding: 15px;
+            }
+
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+<header>
+
+    <h1>
+        AI CCTV Platform
+    </h1>
+
+    <div class="summary">
+
+        Cameras:
+        <span id="cameraCount">0</span>
+
+        |
+
+        Online:
+        <span id="onlineCount">0</span>
+
+    </div>
+
+</header>
+
+
+<div class="container">
+
+    <div
+        id="cameraGrid"
+        class="camera-grid">
+
+        <div
+            id="loading"
+            class="loading">
+
+            Loading cameras...
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/*
+============================================================
+HTTPS CONFIGURATION
+============================================================
+
+Browser:
+    https://localhost
+
+API:
+    https://localhost/api/...
+
+Caddy handles the HTTPS reverse proxy.
+
+DO NOT use:
+    http://127.0.0.1:8001
+*/
+
+const API_BASE = "";
+
+
+/*
+============================================================
+GLOBAL STATE
+============================================================
+*/
+
+const peerConnections = new Map();
+
+
+/*
+============================================================
+DOM ELEMENTS
+============================================================
+*/
+
+const cameraGrid =
+    document.getElementById("cameraGrid");
+
+const cameraCount =
+    document.getElementById("cameraCount");
+
+const onlineCount =
+    document.getElementById("onlineCount");
+
+
+/*
+============================================================
+CREATE CAMERA CARD
+============================================================
+*/
+
+function createCameraCard(camera) {
+
+    const card =
+        document.createElement("div");
+
+    card.className = "camera-card";
+
+    card.dataset.cameraId =
+        camera.camera_id;
+
+
+    card.innerHTML = `
+
+        <div class="camera-header">
+
+            <div>
+
+                <div class="camera-name">
+                    ${escapeHtml(camera.name)}
+                </div>
+
+                <div class="camera-id">
+                    ID: ${escapeHtml(camera.camera_id)}
+                </div>
+
+            </div>
+
+
+            <div
+                class="status"
+                id="status-${camera.camera_id}">
+
+                <div class="status-dot"></div>
+
+                <span>
+                    CHECKING
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="video-container">
+
+            <video
+                id="video-${camera.camera_id}"
+                autoplay
+                muted
+                playsinline>
+            </video>
+
+            <div
+                class="message"
+                id="message-${camera.camera_id}">
+
+                Checking camera...
+
+            </div>
+
+        </div>
+
+
+        <div class="controls">
+
+            Manufacturer:
+            ${escapeHtml(camera.manufacturer || "Unknown")}
+
+            &nbsp; | &nbsp;
+
+            Protocol:
+            ${escapeHtml(camera.protocol || "Unknown")}
+
+        </div>
+
+
+        <div class="button-row">
+
+            <button
+                class="start-button"
+                id="start-${camera.camera_id}">
+
+                ▶ Start
+
+            </button>
+
+
+            <button
+                class="stop-button"
+                id="stop-${camera.camera_id}">
+
+                ■ Stop
+
+            </button>
+
+        </div>
+
+    `;
+
+
+    cameraGrid.appendChild(card);
+
+
+    /*
+    ========================================================
+    BUTTON EVENTS
+    ========================================================
+    */
+
+    const startButton =
+        document.getElementById(
+            `start-${camera.camera_id}`
+        );
+
+
+    const stopButton =
+        document.getElementById(
+            `stop-${camera.camera_id}`
+        );
+
+
+    startButton.addEventListener(
+        "click",
+        () => startCamera(camera.camera_id)
+    );
+
+
+    stopButton.addEventListener(
+        "click",
+        () => stopCamera(camera.camera_id)
+    );
+
+
+    return card;
+}
+
+
+/*
+============================================================
+HTML ESCAPE
+============================================================
+*/
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        String(value);
+
+    return div.innerHTML;
+}
+
+
+/*
+============================================================
+UPDATE CAMERA STATUS
+============================================================
+*/
+
+function updateStatus(
+    cameraId,
+    status,
+    text
+) {
+
+    const statusElement =
+        document.getElementById(
+            `status-${cameraId}`
+        );
+
+
+    if (!statusElement) {
+        return;
+    }
+
+
+    statusElement.className =
+        `status ${status}`;
+
+
+    const span =
+        statusElement.querySelector("span");
+
+
+    if (span) {
+        span.textContent = text;
+    }
+}
+
+
+/*
+============================================================
+UPDATE CAMERA MESSAGE
+============================================================
+*/
+
+function updateMessage(
+    cameraId,
+    message
+) {
+
+    const element =
+        document.getElementById(
+            `message-${cameraId}`
+        );
+
+
+    if (element) {
+        element.textContent = message;
+    }
+}
+
+
+/*
+============================================================
+START CAMERA
+============================================================
+*/
+
+async function startCamera(cameraId) {
+
+    const button =
+        document.getElementById(
+            `start-${cameraId}`
+        );
+
+
+    try {
+
+        if (button) {
+            button.disabled = true;
+        }
+
+
+        updateMessage(
+            cameraId,
+            "Starting camera..."
+        );
+
+
+        updateStatus(
+            cameraId,
+            "",
+            "STARTING"
+        );
+
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/start`,
+                {
+                    method: "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                `Start failed: ${response.status}`
+            );
+        }
+
+
+        console.log(
+            cameraId,
+            "Start:",
+            data
+        );
+
+
+        updateMessage(
+            cameraId,
+            "Camera started. Connecting..."
+        );
+
+
+        /*
+        Give FFmpeg some time to publish
+        the stream to MediaMTX.
+        */
+
+        setTimeout(
+            async () => {
+
+                await loadCamera({
+                    camera_id: cameraId
+                });
+
+            },
+            1500
+        );
+
+    }
+
+
+    catch (error) {
+
+        console.error(
+            cameraId,
+            "Start error:",
+            error
+        );
+
+
+        updateStatus(
+            cameraId,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            cameraId,
+            error.message
+        );
+
+    }
+
+
+    finally {
+
+        if (button) {
+            button.disabled = false;
+        }
+
+    }
+
+}
+
+
+/*
+============================================================
+STOP CAMERA
+============================================================
+*/
+
+async function stopCamera(cameraId) {
+
+    const button =
+        document.getElementById(
+            `stop-${cameraId}`
+        );
+
+
+    try {
+
+        if (button) {
+            button.disabled = true;
+        }
+
+
+        updateMessage(
+            cameraId,
+            "Stopping camera..."
+        );
+
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/stop`,
+                {
+                    method: "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                `Stop failed: ${response.status}`
+            );
+        }
+
+
+        console.log(
+            cameraId,
+            "Stop:",
+            data
+        );
+
+
+        /*
+        Close WebRTC connection.
+        */
+
+        const peerConnection =
+            peerConnections.get(cameraId);
+
+
+        if (peerConnection) {
+
+            peerConnection.close();
+
+            peerConnections.delete(
+                cameraId
+            );
+
+        }
+
+
+        /*
+        Clear video.
+        */
+
+        const video =
+            document.getElementById(
+                `video-${cameraId}`
+            );
+
+
+        if (video) {
+            video.srcObject = null;
+        }
+
+
+        /*
+        Show message again.
+        */
+
+        const message =
+            document.getElementById(
+                `message-${cameraId}`
+            );
+
+
+        if (message) {
+            message.style.display = "flex";
+        }
+
+
+        updateStatus(
+            cameraId,
+            "offline",
+            "OFFLINE"
+        );
+
+
+        updateMessage(
+            cameraId,
+            "Camera is stopped"
+        );
+
+    }
+
+
+    catch (error) {
+
+        console.error(
+            cameraId,
+            "Stop error:",
+            error
+        );
+
+
+        updateStatus(
+            cameraId,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            cameraId,
+            error.message
+        );
+
+    }
+
+
+    finally {
+
+        if (button) {
+            button.disabled = false;
+        }
+
+    }
+
+}
+
+
+/*
+============================================================
+CREATE WEBRTC OFFER
+============================================================
+*/
+
+async function createOffer(cameraId) {
+
+    /*
+    If an old connection exists,
+    close it first.
+    */
+
+    const oldConnection =
+        peerConnections.get(cameraId);
+
+
+    if (oldConnection) {
+
+        oldConnection.close();
+
+        peerConnections.delete(
+            cameraId
+        );
+
+    }
+
+
+    const peerConnection =
+        new RTCPeerConnection({
+            iceServers: []
+        });
+
+
+    peerConnections.set(
+        cameraId,
+        peerConnection
+    );
+
+
+    /*
+    Receive video only.
+    */
+
+    peerConnection.addTransceiver(
+        "video",
+        {
+            direction: "recvonly"
+        }
+    );
+
+
+    /*
+    ICE state monitoring.
+    */
+
+    peerConnection.oniceconnectionstatechange =
+        () => {
+
+            console.log(
+                cameraId,
+                "ICE:",
+                peerConnection.iceConnectionState
+            );
+
+
+            if (
+                peerConnection.iceConnectionState ===
+                "failed"
+            ) {
+
+                updateStatus(
+                    cameraId,
+                    "error",
+                    "STREAM ERROR"
+                );
+
+            }
+
+        };
+
+
+    /*
+    Receive remote video.
+    */
+
+    peerConnection.ontrack =
+        (event) => {
+
+            console.log(
+                cameraId,
+                "Remote track received"
+            );
+
+
+            const video =
+                document.getElementById(
+                    `video-${cameraId}`
+                );
+
+
+            if (
+                video &&
+                event.streams.length > 0
+            ) {
+
+                video.srcObject =
+                    event.streams[0];
+
+
+                updateMessage(
+                    cameraId,
+                    ""
+                );
+
+
+                const message =
+                    document.getElementById(
+                        `message-${cameraId}`
+                    );
+
+
+                if (message) {
+
+                    message.style.display =
+                        "none";
+
+                }
+
+            }
+
+        };
+
+
+    /*
+    Create SDP offer.
+    */
+
+    const offer =
+        await peerConnection.createOffer();
+
+
+    await peerConnection.setLocalDescription(
+        offer
+    );
+
+
+    /*
+    Wait for ICE candidates.
+    */
+
+    await waitForIceGathering(
+        peerConnection
+    );
+
+
+    return {
+
+        peerConnection,
+
+        offer:
+            peerConnection.localDescription
+
+    };
+
+}
+
+
+/*
+============================================================
+WAIT FOR ICE GATHERING
+============================================================
+*/
+
+function waitForIceGathering(
+    peerConnection
+) {
+
+    return new Promise(
+        (resolve) => {
+
+            if (
+                peerConnection.iceGatheringState ===
+                "complete"
+            ) {
+
+                resolve();
+
+                return;
+
+            }
+
+
+            function checkState() {
+
+                if (
+                    peerConnection.iceGatheringState ===
+                    "complete"
+                ) {
+
+                    peerConnection.removeEventListener(
+                        "icegatheringstatechange",
+                        checkState
+                    );
+
+
+                    resolve();
+
+                }
+
+            }
+
+
+            peerConnection.addEventListener(
+                "icegatheringstatechange",
+                checkState
+            );
+
+        }
+    );
+
+}
+
+
+/*
+============================================================
+CONNECT WEBRTC THROUGH CADDY
+============================================================
+
+Browser:
+
+    HTTPS
+      ↓
+    Caddy
+      ↓
+    MediaMTX :8889
+
+Browser URL:
+
+    /streams/cam1/whep
+============================================================
+*/
+
+async function connectWebRTC(cameraId) {
+
+    updateMessage(
+        cameraId,
+        "Connecting to live video..."
+    );
+
+
+    const result =
+        await createOffer(cameraId);
+
+
+    const whepURL =
+        `/streams/${encodeURIComponent(cameraId)}/whep`;
+
+
+    console.log(
+        cameraId,
+        "WHEP:",
+        whepURL
+    );
+
+
+    const response =
+        await fetch(
+            whepURL,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/sdp"
+                },
+
+                body:
+                    result.offer.sdp
+            }
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            `WHEP failed: ${response.status}`
+        );
+
+    }
+
+
+    const answerSDP =
+        await response.text();
+
+
+    await result.peerConnection
+        .setRemoteDescription({
+
+            type: "answer",
+
+            sdp: answerSDP
+
+        });
+
+
+    console.log(
+        cameraId,
+        "WebRTC connected"
+    );
+
+}
+
+
+/*
+============================================================
+LOAD ONE CAMERA
+============================================================
+*/
+
+async function loadCamera(camera) {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(camera.camera_id)}/stream`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Stream API: ${response.status}`
+            );
+
+        }
+
+
+        const stream =
+            await response.json();
+
+
+        /*
+        Camera offline.
+        */
+
+        if (!stream.online) {
+
+            updateStatus(
+                camera.camera_id,
+                "offline",
+                "OFFLINE"
+            );
+
+
+            updateMessage(
+                camera.camera_id,
+                "Camera is offline"
+            );
+
+
+            return false;
+
+        }
+
+
+        /*
+        Camera online.
+        */
+
+        updateStatus(
+            camera.camera_id,
+            "online",
+            "ONLINE"
+        );
+
+
+        /*
+        Connect through HTTPS/Caddy.
+        */
+
+        await connectWebRTC(
+            camera.camera_id
+        );
+
+
+        return true;
+
+    }
+
+
+    catch (error) {
+
+        console.error(
+            camera.camera_id,
+            error
+        );
+
+
+        updateStatus(
+            camera.camera_id,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            camera.camera_id,
+            "Unable to connect"
+        );
+
+
+        return false;
+
+    }
+
+}
+
+
+/*
+============================================================
+LOAD ALL CAMERAS
+============================================================
+*/
+
+async function loadCameras() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Camera API: ${response.status}`
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        cameraCount.textContent =
+            data.count;
+
+
+        cameraGrid.innerHTML = "";
+
+
+        if (
+            !data.cameras ||
+            data.cameras.length === 0
+        ) {
+
+            cameraGrid.innerHTML = `
+
+                <div class="loading">
+
+                    No cameras registered.
+
+                </div>
+
+            `;
+
+
+            return;
+
+        }
+
+
+        /*
+        Create camera cards.
+        */
+
+        for (
+            const camera of data.cameras
+        ) {
+
+            createCameraCard(camera);
+
+        }
+
+
+        /*
+        Connect cameras.
+        */
+
+        let online = 0;
+
+
+        for (
+            const camera of data.cameras
+        ) {
+
+            const result =
+                await loadCamera(camera);
+
+
+            if (result) {
+                online++;
+            }
+
+
+            onlineCount.textContent =
+                online;
+
+        }
+
+    }
+
+
+    catch (error) {
+
+        console.error(error);
+
+
+        cameraGrid.innerHTML = `
+
+            <div class="error">
+
+                Unable to load cameras.
+
+                <br><br>
+
+                Make sure FastAPI is running.
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+/*
+============================================================
+START APPLICATION
+============================================================
+*/
+
+/*
+============================================================
+AUTOMATIC CAMERA STATUS CHECK
+============================================================
+*/
+
+async function refreshCameraStatuses() {
+
+    const cards =
+        document.querySelectorAll(".camera-card");
+
+    let online = 0;
+
+
+    for (const card of cards) {
+
+        const cameraId =
+            card.dataset.cameraId;
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/status`
+                );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Status API: ${response.status}`
+                );
+
+            }
+
+
+            const data =
+                await response.json();
+
+
+            console.log(
+                cameraId,
+                "Status:",
+                data
+            );
+
+
+            /*
+            ====================================================
+            CAMERA ONLINE
+            ====================================================
+            */
+
+            if (data.online) {
+
+                online++;
+
+
+                /*
+                Check whether WebRTC connection
+                already exists.
+                */
+
+                const existingConnection =
+                    peerConnections.get(cameraId);
+
+
+                /*
+                If there is no WebRTC connection,
+                reconnect automatically.
+                */
+
+                if (
+                    !existingConnection ||
+                    existingConnection.connectionState ===
+                    "failed" ||
+                    existingConnection.connectionState ===
+                    "closed"
+                ) {
+
+                    console.log(
+                        cameraId,
+                        "WebRTC connection missing. Reconnecting..."
+                    );
+
+
+                    updateStatus(
+                        cameraId,
+                        "",
+                        "CONNECTING"
+                    );
+
+
+                    updateMessage(
+                        cameraId,
+                        "Reconnecting to live video..."
+                    );
+
+
+                    try {
+
+                        await connectWebRTC(
+                            cameraId
+                        );
+
+
+                        updateStatus(
+                            cameraId,
+                            "online",
+                            "ONLINE"
+                        );
+
+
+                    }
+
+                    catch (webrtcError) {
+
+                        console.error(
+                            cameraId,
+                            "Reconnect failed:",
+                            webrtcError
+                        );
+
+
+                        updateStatus(
+                            cameraId,
+                            "error",
+                            "STREAM ERROR"
+                        );
+
+
+                        updateMessage(
+                            cameraId,
+                            "Unable to reconnect"
+                        );
+
+                    }
+
+                }
+
+                else {
+
+                    /*
+                    WebRTC connection already exists.
+                    */
+
+                    updateStatus(
+                        cameraId,
+                        "online",
+                        "ONLINE"
+                    );
+
+                }
+
+            }
+
+
+            /*
+            ====================================================
+            CAMERA OFFLINE
+            ====================================================
+            */
+
+            else {
+
+                updateStatus(
+                    cameraId,
+                    "offline",
+                    "OFFLINE"
+                );
+
+
+                updateMessage(
+                    cameraId,
+                    "Camera is offline"
+                );
+
+
+                /*
+                Clean up WebRTC connection.
+                */
+
+                const peerConnection =
+                    peerConnections.get(cameraId);
+
+
+                if (peerConnection) {
+
+                    console.log(
+                        cameraId,
+                        "Closing WebRTC connection"
+                    );
+
+
+                    peerConnection.close();
+
+
+                    peerConnections.delete(
+                        cameraId
+                    );
+
+                }
+
+
+                /*
+                Clear video element.
+                */
+
+                const video =
+                    document.getElementById(
+                        `video-${cameraId}`
+                    );
+
+
+                if (video) {
+
+                    video.srcObject = null;
+
+                }
+
+
+                /*
+                Show message again.
+                */
+
+                const message =
+                    document.getElementById(
+                        `message-${cameraId}`
+                    );
+
+
+                if (message) {
+
+                    message.style.display =
+                        "flex";
+
+                }
+
+            }
+
+        }
+
+
+        catch (error) {
+
+            console.error(
+                cameraId,
+                "Status check failed:",
+                error
+            );
+
+
+            updateStatus(
+                cameraId,
+                "error",
+                "ERROR"
+            );
+
+        }
+
+    }
+
+
+    onlineCount.textContent =
+        online;
+}
+
+
+/*
+============================================================
+START APPLICATION
+============================================================
+*/
+
+loadCameras();
+
+
+/*
+============================================================
+CHECK STATUS EVERY 5 SECONDS
+============================================================
+*/
+
+setInterval(
+    refreshCameraStatuses,
+    5000
+);
+
+</script>
+
+</body>
+
+</html>

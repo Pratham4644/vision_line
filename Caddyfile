@@ -1,0 +1,25 @@
+localhost {
+	tls internal
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	# WebRTC
+	handle_path /streams/* {
+		reverse_proxy 127.0.0.1:8889
+	}
+
+	# HLS
+	handle_path /hls/* {
+		reverse_proxy 127.0.0.1:8888 {
+			header_down Location ^/(.*)$ /hls/$1
+		}
+	}
+
+	# Frontend
+	handle {
+		root * D:\pyy.intern\frontend
+		file_server
+	}
+}
