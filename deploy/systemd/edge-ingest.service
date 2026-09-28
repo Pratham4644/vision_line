@@ -1,0 +1,31 @@
+[Unit]
+Description=Edge Camera Ingest Service (FFmpeg -> MediaMTX)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=camera-edge
+Group=camera-edge
+WorkingDirectory=/opt/camera-edge
+EnvironmentFile=/etc/camera-edge/edge.env
+ExecStart=/opt/camera-edge/.venv/bin/python /opt/camera-edge/edge/ingest.py
+Restart=always
+RestartSec=3s
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Security & Sandboxing
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/camera-edge
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=edge-ingest
+
+[Install]
+WantedBy=multi-user.target

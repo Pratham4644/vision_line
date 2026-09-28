@@ -1,0 +1,32 @@
+[Unit]
+Description=MediaMTX Real-time Streaming Server
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=azureuser
+Group=azureuser
+WorkingDirectory=/home/azureuser
+EnvironmentFile=-/home/azureuser/.env
+ExecStart=/usr/local/bin/mediamtx /home/azureuser/mediamtx.yml
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+
+# Resource limits suited for Azure VM
+MemoryHigh=350M
+MemoryMax=500M
+
+# Sandboxing and security
+ProtectSystem=full
+ProtectHome=false
+NoNewPrivileges=true
+
+# Standard systemd logging to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mediamtx
+
+[Install]
+WantedBy=multi-user.target

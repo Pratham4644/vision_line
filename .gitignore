@@ -1,3 +1,52 @@
-.venv/
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+id_rsa
+id_ed25519
+streaming/.mediamtx_runtime.yml
+streaming/test_*.yml
+
+
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+dist/
+build/
+.npm
+npm-debug.log*
+
+# Media and logs
+*.log
+recordings/
+*.mp4
+*.avi
+*.mkv
+*.pt
+*.onnx
+
+# Legacy json state
+users.json
+config/cameras.json
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

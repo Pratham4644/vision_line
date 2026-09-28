@@ -1,0 +1,65 @@
+# Global MediaMTX v1.21.1 Configuration
+# Dynamic runtime paths are provisioned and deleted dynamically via the Control API.
+# Do NOT define individual camera paths here.
+
+logLevel: info
+logDestinations:
+  - stdout
+
+# Control API (Localhost binding only - port 9997)
+api: true
+apiAddress: 127.0.0.1:9997
+
+# RTSP Streaming Plane (Port 8554)
+rtsp: true
+rtspAddress: :8554
+rtspTransports:
+  - tcp
+
+# Disabled unused protocols
+rtmp: false
+hls: false
+srt: false
+moq: false
+
+# WebRTC Streaming Plane (Port 8889)
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins:
+  - "*"
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+webrtcIPsFromInterfaces: false
+
+# Azure Public IP and Hostname for WebRTC ICE candidate generation
+webrtcAdditionalHosts:
+  - 20.194.48.89
+  - camera1.koreacentral.cloudapp.azure.com
+
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+# Internal Role-Separated Authentication
+authMethod: internal
+authInternalUsers:
+  - user: ${MEDIAMTX_PUBLISH_USERNAME}
+    pass: ${MEDIAMTX_PUBLISH_PASSWORD}
+    permissions:
+      - action: publish
+  - user: ${MEDIAMTX_READ_USERNAME}
+    pass: ${MEDIAMTX_READ_PASSWORD}
+    permissions:
+      - action: read
+  - user: internal_monitor
+    pass: ""
+    ips:
+      - 127.0.0.1
+      - ::1
+    permissions:
+      - action: api
+      - action: metrics
+
+# Dynamic paths: Zero hardcoded camera paths.
+# All camera stream paths are dynamically registered and deregistered via Control API by FastAPI.
+paths: {}

@@ -1,0 +1,32 @@
+[Unit]
+Description=Multi-Camera Streaming Platform Backend Service
+After=network.target network-online.target mediamtx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=azureuser
+Group=azureuser
+WorkingDirectory=/opt/camera-platform
+EnvironmentFile=/opt/camera-platform/.env
+ExecStart=/opt/camera-platform/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1 --log-level info
+Restart=always
+RestartSec=5s
+
+# Resource governance for B2ats_v2 (1 GiB RAM)
+MemoryHigh=350M
+MemoryMax=500M
+CPUQuota=150%
+
+# Sandboxing
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=camera-backend
+
+[Install]
+WantedBy=multi-user.target
