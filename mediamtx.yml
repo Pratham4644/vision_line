@@ -22,7 +22,7 @@
 # hlsAddress: :8888
 
 # # Updated name for current MediaMTX versions
-# hlsAllowOrigins: ['*']
+# hlsAllowOrigin: '*'
 
 # hlsVariant: mpegts
 # hlsSegmentDuration: 1s
@@ -103,7 +103,7 @@
 # ============================================================
 hls: yes
 hlsAddress: :8888
-hlsAllowOrigins: ['*']
+hlsAllowOrigin: '*'
 hlsVariant: mpegts
 hlsSegmentDuration: 1s
 hlsSegmentCount: 3
@@ -124,8 +124,7 @@ rtspAddress: :8554
 webrtc: yes
 webrtcAddress: :8889
 
-webrtcAllowOrigins:
-  - '*'
+webrtcAllowOrigin: '*'
 
 
 # ============================================================

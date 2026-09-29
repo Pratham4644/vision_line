@@ -19,7 +19,7 @@ localhost {
 
 	# Frontend
 	handle {
-		root * D:\pyy.intern\frontend
+		root * "D:\DHRUVAL\Saakh New Enterpirse\Saakh-Vision-platform\vision_line\frontend"
 		file_server
 	}
 }
