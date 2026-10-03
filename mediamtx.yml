@@ -158,14 +158,21 @@ authInternalUsers:
     permissions:
       - action: read
 
-
 # ============================================================
 # CAMERA PATHS
 # ============================================================
+
 paths:
+
+  # Original camera stream
   cam1:
     source: publisher
 
+  # AI-processed cam1 stream
+  cam1-ai:
+    source: publisher
+
+  # Hikvision cameras
   cam-hik1:
     source: publisher
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -27,5 +27,1367 @@ async function loadCameras(){try{const r=await fetch(`${API_BASE}/api/cameras`);
 async function refreshCameraStatuses(){const cards=document.querySelectorAll(".camera-card");let online=0;for(const card of cards){const id=card.dataset.cameraId;try{const r=await fetch(`${API_BASE}/api/cameras/${encodeURIComponent(id)}/status`);if(!r.ok)throw new Error(`Status API: ${r.status}`);const data=await r.json();if(data.online){online++;if(!players.get(id)){await connectHLS(id)}}else{destroyPlayer(id);updateStatus(id,"offline","OFFLINE");updateMessage(id,"Camera is offline")}}catch(e){console.warn(id,e);updateStatus(id,"error","ERROR")}}onlineCount.textContent=online}
 loadCameras();setInterval(refreshCameraStatuses,5000);
 </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AI CCTV Platform</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111827;
+    color: #fff;
+}
+
+header {
+    padding: 20px 30px;
+    background: #1f2937;
+    border-bottom: 1px solid #374151;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.summary {
+    margin-top: 8px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+.container {
+    padding: 30px;
+}
+
+.camera-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(420px, 1fr)
+    );
+    gap: 20px;
+}
+
+.camera-card {
+    background: #1f2937;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #374151;
+}
+
+.camera-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+}
+
+.camera-name {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.camera-id {
+    color: #9ca3af;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.ai-label {
+    color: #22c55e;
+    font-size: 11px;
+    margin-top: 5px;
+    font-weight: bold;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #6b7280;
+}
+
+.status.online .status-dot {
+    background: #22c55e;
+}
+
+.status.offline .status-dot {
+    background: #ef4444;
+}
+
+.status.error .status-dot {
+    background: #f59e0b;
+}
+
+.video-container {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    position: relative;
+}
+
+.video-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #9ca3af;
+    font-size: 15px;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+}
+
+.controls {
+    padding: 12px 20px;
+    color: #9ca3af;
+    font-size: 13px;
+    border-top: 1px solid #374151;
+}
+
+.ai-stream {
+    color: #22c55e;
+    font-weight: bold;
+}
+
+.button-row {
+    display: flex;
+    gap: 10px;
+    padding: 12px 20px;
+    border-top: 1px solid #374151;
+}
+
+.button-row button {
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.start-button {
+    background: #22c55e;
+    color: #fff;
+}
+
+.stop-button {
+    background: #ef4444;
+    color: #fff;
+}
+
+.button-row button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.loading,
+.error {
+    text-align: center;
+    padding: 50px;
+}
+
+.loading {
+    color: #9ca3af;
+}
+
+.error {
+    color: #f87171;
+}
+
+@media(max-width: 600px) {
+
+    .container {
+        padding: 15px;
+    }
+
+    .camera-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+    <h1>AI CCTV Platform</h1>
+
+    <div class="summary">
+        Cameras:
+        <span id="cameraCount">0</span>
+        |
+        Online:
+        <span id="onlineCount">0</span>
+    </div>
+
+</header>
+
+
+<div class="container">
+
+    <div
+        id="cameraGrid"
+        class="camera-grid"
+    >
+
+        <div
+            id="loading"
+            class="loading"
+        >
+            Loading cameras...
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- HLS.js -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.13/dist/hls.min.js"></script>
+
+
+<script>
+
+/* ============================================================
+   BASIC CONFIGURATION
+   ============================================================ */
+
+const API_BASE = "";
+
+const players = new Map();
+
+const cameraGrid =
+    document.getElementById("cameraGrid");
+
+const cameraCount =
+    document.getElementById("cameraCount");
+
+const onlineCount =
+    document.getElementById("onlineCount");
+
+
+/* ============================================================
+   CAMERA -> PLAYBACK STREAM MAPPING
+   ============================================================
+
+   IMPORTANT:
+
+   Physical camera:
+       cam1
+
+   AI processed MediaMTX stream:
+       cam1-ai
+
+   Therefore:
+
+       cam1 -> cam1-ai
+
+   Other cameras continue normally.
+   ============================================================ */
+
+const STREAM_MAP = {
+
+    "cam1": "cam1-ai"
+
+};
+
+
+/* ============================================================
+   GET PLAYBACK STREAM ID
+   ============================================================ */
+
+function getPlaybackStreamId(cameraId) {
+
+    return STREAM_MAP[cameraId] || cameraId;
+
+}
+
+
+/* ============================================================
+   HTML ESCAPING
+   ============================================================ */
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        String(value ?? "");
+
+    return div.innerHTML;
+}
+
+
+/* ============================================================
+   UPDATE CAMERA STATUS
+   ============================================================ */
+
+function updateStatus(
+    id,
+    state,
+    text
+) {
+
+    const element =
+        document.getElementById(
+            `status-${id}`
+        );
+
+    if (!element) {
+        return;
+    }
+
+    element.className =
+        `status ${state}`;
+
+    const span =
+        element.querySelector("span");
+
+    if (span) {
+        span.textContent = text;
+    }
+}
+
+
+/* ============================================================
+   UPDATE VIDEO MESSAGE
+   ============================================================ */
+
+function updateMessage(
+    id,
+    text,
+    show = true
+) {
+
+    const element =
+        document.getElementById(
+            `message-${id}`
+        );
+
+    if (!element) {
+        return;
+    }
+
+    element.textContent = text;
+
+    element.style.display =
+        show ? "flex" : "none";
+}
+
+
+/* ============================================================
+   CREATE CAMERA CARD
+   ============================================================ */
+
+function createCameraCard(camera) {
+
+    const card =
+        document.createElement("div");
+
+    card.className =
+        "camera-card";
+
+    card.dataset.cameraId =
+        camera.camera_id;
+
+
+    const playbackStreamId =
+        getPlaybackStreamId(
+            camera.camera_id
+        );
+
+
+    const isAIStream =
+        playbackStreamId !==
+        camera.camera_id;
+
+
+    card.innerHTML = `
+
+        <div class="camera-header">
+
+            <div>
+
+                <div class="camera-name">
+
+                    ${escapeHtml(
+                        camera.name
+                    )}
+
+                </div>
+
+
+                <div class="camera-id">
+
+                    ID:
+                    ${escapeHtml(
+                        camera.camera_id
+                    )}
+
+                </div>
+
+
+                ${
+                    isAIStream
+                    ?
+                    `
+                    <div class="ai-label">
+
+                        🤖 AI PROCESSING
+
+                    </div>
+                    `
+                    :
+                    ""
+                }
+
+            </div>
+
+
+            <div
+                class="status"
+                id="status-${camera.camera_id}"
+            >
+
+                <div class="status-dot"></div>
+
+                <span>
+                    CHECKING
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="video-container">
+
+            <video
+                id="video-${camera.camera_id}"
+                autoplay
+                muted
+                playsinline
+                controls
+            ></video>
+
+
+            <div
+                class="message"
+                id="message-${camera.camera_id}"
+            >
+                Checking camera...
+            </div>
+
+        </div>
+
+
+        <div class="controls">
+
+            Manufacturer:
+            ${escapeHtml(
+                camera.manufacturer ||
+                "Unknown"
+            )}
+
+            &nbsp; | &nbsp;
+
+            Protocol:
+            ${escapeHtml(
+                camera.protocol ||
+                "Unknown"
+            )}
+
+            ${
+                isAIStream
+                ?
+                `
+                &nbsp; | &nbsp;
+
+                Stream:
+                <span class="ai-stream">
+                    AI
+                </span>
+                `
+                :
+                ""
+            }
+
+        </div>
+
+
+        <div class="button-row">
+
+            <button
+                class="start-button"
+                id="start-${camera.camera_id}"
+            >
+                ▶ Start
+            </button>
+
+
+            <button
+                class="stop-button"
+                id="stop-${camera.camera_id}"
+            >
+                ■ Stop
+            </button>
+
+        </div>
+
+    `;
+
+
+    cameraGrid.appendChild(card);
+
+
+    /* Start button */
+
+    document
+        .getElementById(
+            `start-${camera.camera_id}`
+        )
+        .addEventListener(
+            "click",
+            () =>
+                startCamera(
+                    camera.camera_id
+                )
+        );
+
+
+    /* Stop button */
+
+    document
+        .getElementById(
+            `stop-${camera.camera_id}`
+        )
+        .addEventListener(
+            "click",
+            () =>
+                stopCamera(
+                    camera.camera_id
+                )
+        );
+
+}
+
+
+/* ============================================================
+   DESTROY HLS PLAYER
+   ============================================================ */
+
+function destroyPlayer(id) {
+
+    const hls =
+        players.get(id);
+
+
+    if (hls) {
+
+        hls.destroy();
+
+        players.delete(id);
+
+    }
+
+
+    const video =
+        document.getElementById(
+            `video-${id}`
+        );
+
+
+    if (video) {
+
+        video.pause();
+
+        video.removeAttribute("src");
+
+        video.load();
+
+    }
+
+}
+
+
+/* ============================================================
+   START CAMERA
+   ============================================================ */
+
+async function startCamera(id) {
+
+    const button =
+        document.getElementById(
+            `start-${id}`
+        );
+
+
+    try {
+
+        if (button) {
+            button.disabled = true;
+        }
+
+
+        updateStatus(
+            id,
+            "",
+            "STARTING"
+        );
+
+
+        updateMessage(
+            id,
+            "Starting camera..."
+        );
+
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(id)}/start`,
+                {
+                    method: "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                `Start failed: ${response.status}`
+            );
+
+        }
+
+
+        /*
+         * Give MediaMTX / FFmpeg
+         * some time to become ready.
+         */
+
+        setTimeout(
+            () => loadCamera(id),
+            1500
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            id,
+            error
+        );
+
+
+        updateStatus(
+            id,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            id,
+            error.message
+        );
+
+
+    } finally {
+
+        if (button) {
+            button.disabled = false;
+        }
+
+    }
+
+}
+
+
+/* ============================================================
+   STOP CAMERA
+   ============================================================ */
+
+async function stopCamera(id) {
+
+    const button =
+        document.getElementById(
+            `stop-${id}`
+        );
+
+
+    try {
+
+        if (button) {
+            button.disabled = true;
+        }
+
+
+        updateMessage(
+            id,
+            "Stopping camera..."
+        );
+
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(id)}/stop`,
+                {
+                    method: "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                `Stop failed: ${response.status}`
+            );
+
+        }
+
+
+        destroyPlayer(id);
+
+
+        updateStatus(
+            id,
+            "offline",
+            "OFFLINE"
+        );
+
+
+        updateMessage(
+            id,
+            "Camera is stopped"
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            id,
+            error
+        );
+
+
+        updateStatus(
+            id,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            id,
+            error.message
+        );
+
+
+    } finally {
+
+        if (button) {
+            button.disabled = false;
+        }
+
+    }
+
+}
+
+
+/* ============================================================
+   CONNECT HLS
+   ============================================================ */
+
+async function connectHLS(id) {
+
+    const video =
+        document.getElementById(
+            `video-${id}`
+        );
+
+
+    if (!video) {
+
+        throw new Error(
+            "Video element not found"
+        );
+
+    }
+
+
+    destroyPlayer(id);
+
+
+    /*
+     * IMPORTANT PART
+     *
+     * Physical camera:
+     *
+     *     cam1
+     *
+     * Playback:
+     *
+     *     cam1-ai
+     *
+     * So the public website receives
+     * the AI-processed stream.
+     */
+
+    const streamId =
+        getPlaybackStreamId(id);
+
+
+    const url =
+        `/hls/${encodeURIComponent(streamId)}/index.m3u8?cookieCheck=1`;
+
+
+    console.log(
+        `[HLS] Camera ${id} → Stream ${streamId}`
+    );
+
+
+    updateMessage(
+        id,
+        "Connecting to live video..."
+    );
+
+
+    /* ========================================================
+       HLS.JS
+       ======================================================== */
+
+    if (
+        window.Hls &&
+        Hls.isSupported()
+    ) {
+
+        const hls =
+            new Hls({
+
+                enableWorker: true,
+
+                lowLatencyMode: true,
+
+                maxBufferLength: 4,
+
+                backBufferLength: 2,
+
+                xhrSetup: xhr => {
+
+                    xhr.withCredentials =
+                        true;
+
+                }
+
+            });
+
+
+        players.set(
+            id,
+            hls
+        );
+
+
+        /* HLS error handler */
+
+        hls.on(
+            Hls.Events.ERROR,
+            (event, data) => {
+
+                console.warn(
+                    `[HLS ERROR] ${id}`,
+                    data
+                );
+
+
+                if (data.fatal) {
+
+                    updateStatus(
+                        id,
+                        "error",
+                        "STREAM ERROR"
+                    );
+
+
+                    updateMessage(
+                        id,
+                        "HLS stream error"
+                    );
+
+                }
+
+            }
+        );
+
+
+        /* Manifest successfully loaded */
+
+        hls.on(
+            Hls.Events.MANIFEST_PARSED,
+            () => {
+
+                video
+                    .play()
+                    .catch(() => {});
+
+
+                updateMessage(
+                    id,
+                    "",
+                    false
+                );
+
+
+                updateStatus(
+                    id,
+                    "online",
+                    "ONLINE"
+                );
+
+            }
+        );
+
+
+        hls.loadSource(url);
+
+        hls.attachMedia(video);
+
+        return;
+
+    }
+
+
+    /* ========================================================
+       NATIVE HLS FALLBACK
+       ======================================================== */
+
+    if (
+        video.canPlayType(
+            "application/vnd.apple.mpegurl"
+        )
+    ) {
+
+        video.src = url;
+
+
+        video.addEventListener(
+            "loadedmetadata",
+            () => {
+
+                video
+                    .play()
+                    .catch(() => {});
+
+            },
+            {
+                once: true
+            }
+        );
+
+
+        updateMessage(
+            id,
+            "",
+            false
+        );
+
+
+        updateStatus(
+            id,
+            "online",
+            "ONLINE"
+        );
+
+
+        return;
+
+    }
+
+
+    throw new Error(
+        "This browser does not support HLS"
+    );
+
+}
+
+
+/* ============================================================
+   LOAD ONE CAMERA
+   ============================================================ */
+
+async function loadCamera(id) {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras/${encodeURIComponent(id)}/stream`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Stream API: ${response.status}`
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.online) {
+
+            destroyPlayer(id);
+
+
+            updateStatus(
+                id,
+                "offline",
+                "OFFLINE"
+            );
+
+
+            updateMessage(
+                id,
+                "Camera is offline"
+            );
+
+
+            return false;
+
+        }
+
+
+        updateStatus(
+            id,
+            "",
+            "CONNECTING"
+        );
+
+
+        await connectHLS(id);
+
+
+        return true;
+
+
+    } catch (error) {
+
+        console.error(
+            id,
+            error
+        );
+
+
+        updateStatus(
+            id,
+            "error",
+            "ERROR"
+        );
+
+
+        updateMessage(
+            id,
+            "Unable to connect: " +
+            error.message
+        );
+
+
+        return false;
+
+    }
+
+}
+
+
+/* ============================================================
+   LOAD ALL CAMERAS
+   ============================================================ */
+
+async function loadCameras() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/cameras`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Camera API: ${response.status}`
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        cameraCount.textContent =
+            data.count;
+
+
+        cameraGrid.innerHTML = "";
+
+
+        if (
+            !data.cameras ||
+            !data.cameras.length
+        ) {
+
+            cameraGrid.innerHTML =
+                `
+                <div class="loading">
+                    No cameras registered.
+                </div>
+                `;
+
+            return;
+
+        }
+
+
+        /* Create cards */
+
+        data.cameras.forEach(
+            createCameraCard
+        );
+
+
+        /* Connect cameras */
+
+        let online = 0;
+
+
+        for (
+            const camera
+            of data.cameras
+        ) {
+
+            if (
+                await loadCamera(
+                    camera.camera_id
+                )
+            ) {
+
+                online++;
+
+            }
+
+
+            onlineCount.textContent =
+                online;
+
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            error
+        );
+
+
+        cameraGrid.innerHTML = `
+
+            <div class="error">
+
+                Unable to load cameras.
+
+                <br><br>
+
+                ${escapeHtml(
+                    error.message
+                )}
+
+                <br><br>
+
+                Make sure FastAPI is running.
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+/* ============================================================
+   REFRESH CAMERA STATUS
+   ============================================================ */
+
+async function refreshCameraStatuses() {
+
+    const cards =
+        document.querySelectorAll(
+            ".camera-card"
+        );
+
+
+    let online = 0;
+
+
+    for (
+        const card
+        of cards
+    ) {
+
+        const id =
+            card.dataset.cameraId;
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_BASE}/api/cameras/${encodeURIComponent(id)}/status`
+                );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Status API: ${response.status}`
+                );
+
+            }
+
+
+            const data =
+                await response.json();
+
+
+            if (data.online) {
+
+                online++;
+
+
+                /*
+                 * Don't recreate the HLS
+                 * player every 5 seconds.
+                 */
+
+                if (
+                    !players.get(id)
+                ) {
+
+                    await connectHLS(id);
+
+                }
+
+            } else {
+
+                destroyPlayer(id);
+
+
+                updateStatus(
+                    id,
+                    "offline",
+                    "OFFLINE"
+                );
+
+
+                updateMessage(
+                    id,
+                    "Camera is offline"
+                );
+
+            }
+
+
+        } catch (error) {
+
+            console.warn(
+                id,
+                error
+            );
+
+
+            updateStatus(
+                id,
+                "error",
+                "ERROR"
+            );
+
+        }
+
+    }
+
+
+    onlineCount.textContent =
+        online;
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+   ============================================================ */
+
+loadCameras();
+
+
+/* ============================================================
+   REFRESH STATUS EVERY 5 SECONDS
+   ============================================================ */
+
+setInterval(
+    refreshCameraStatuses,
+    5000
+);
+
+</script>
+
 </body>
 </html>

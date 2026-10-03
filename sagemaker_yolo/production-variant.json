@@ -1,0 +1,9 @@
+[
+  {
+    "VariantName": "AllTraffic",
+    "ModelName": "yolo26s-person-detection",
+    "InitialInstanceCount": 1,
+    "InstanceType": "ml.m5.xlarge",
+    "InitialVariantWeight": 1.0
+  }
+]
