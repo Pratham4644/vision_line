@@ -58,9 +58,9 @@ _DEBUG_LOG_PATH = Path(__file__).resolve().parent.parent / "debug-abbe6f.log"
 PUBLISH_TCP_TIMEOUT = 5.0
 
 EDGE_DIR = Path(__file__).resolve().parent
-CAMERA_KEY = hashlib.sha256(CAMERA_ID.encode("utf-8")).hexdigest()[:16] if CAMERA_ID else "unknown"
-CAMERA_LOCK_PATH = EDGE_DIR / f".ingest-{CAMERA_KEY}.lock"
-FFMPEG_PID_PATH = EDGE_DIR / f".ffmpeg-{CAMERA_KEY}.pid"
+CAMERA_KEY = ""
+CAMERA_LOCK_PATH = EDGE_DIR / ".ingest-uninitialized.lock"
+FFMPEG_PID_PATH = EDGE_DIR / ".ffmpeg-uninitialized.pid"
 
 STOP_EVENT = threading.Event()
 PROCESS_LOCK = threading.Lock()
@@ -87,6 +87,15 @@ def _debug_log(hypothesis_id: str, location: str, message: str, data: dict) -> N
     except OSError:
         pass
     # endregion
+
+
+def init_camera_paths() -> None:
+    """Compute per-camera lock/PID paths after CAMERA_ID is known."""
+    global CAMERA_KEY, CAMERA_LOCK_PATH, FFMPEG_PID_PATH
+    camera_id = CAMERA_ID or "unknown"
+    CAMERA_KEY = hashlib.sha256(camera_id.encode("utf-8")).hexdigest()[:16]
+    CAMERA_LOCK_PATH = EDGE_DIR / f".ingest-{CAMERA_KEY}.lock"
+    FFMPEG_PID_PATH = EDGE_DIR / f".ffmpeg-{CAMERA_KEY}.pid"
 
 
 def load_runtime_config() -> None:
@@ -124,6 +133,7 @@ def load_runtime_config() -> None:
         format="%(asctime)s | %(levelname)s | ingest | %(message)s",
         force=True,
     )
+    init_camera_paths()
 
 
 def check_publish_endpoint_reachable() -> tuple[bool, str]:
